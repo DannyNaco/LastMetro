@@ -1,0 +1,190 @@
+openapi: 3.0.3
+info:
+  title: Dernier Métro API
+  version: 1.2.0
+servers:
+  - url: http://localhost:5000
+
+tags:
+  - name: Metro
+    description: Endpoints de simulation du métro (next/last)
+  - name: Health
+    description: Statut de l’API et de la base de données
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Message d'erreur
+        details:
+          description: Détails optionnels
+      required: [error]
+      example: { error: "unknown station" }
+
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string, example: "ok" }
+        service: { type: string, example: "dernier-metro-api" }
+      required: [status, service]
+
+    DBHealthResponse:
+      type: object
+      properties:
+        status: { type: string, example: "ok" }
+        database: { type: string, example: "connected" }
+      required: [status, database]
+
+    NextMetroResponse:
+      type: object
+      properties:
+        station: { type: string, example: "Bastille" }
+        line: { type: string, example: "M1" }
+        headwayMin: { type: integer, minimum: 1, example: 3 }
+        nextArrival:
+          type: string
+          description: Heure au format 24h
+          pattern: "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+          example: "12:34"
+      required: [station, line, headwayMin, nextArrival]
+
+    LastMetroResponse:
+      type: object
+      properties:
+        station: { type: string, example: "Châtelet" }
+        lastMetro:
+          type: string
+          description: Dernier métro (format 24h)
+          pattern: "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+          example: "00:58"
+        line: { type: string, example: "M1" }
+        tz: { type: string, example: "Europe/Paris" }
+      required: [station, lastMetro, line, tz]
+
+paths:
+  /health:
+    get:
+      summary: Health check de l’API
+      tags: [Health]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /DBhealth:
+    get:
+      summary: Health check de la base de données
+      tags: [Health]
+      responses:
+        '200':
+          description: DB joignable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DBHealthResponse' }
+        '500':
+          description: DB non joignable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DBHealthResponse' }
+              examples:
+                down:
+                  value: { status: "error", database: "unreachable" }
+
+  /next-metro:
+    get:
+      summary: Prochain passage de métro (simulation, sans DB)
+      tags: [Metro]
+      parameters:
+        - in: query
+          name: station
+          required: true
+          description: Nom de la station (obligatoire)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Heure d'arrivée estimée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NextMetroResponse' }
+              examples:
+                ok:
+                  value: { station: "Bastille", line: "M1", headwayMin: 3, nextArrival: "12:34" }
+        '400':
+          description: Paramètre manquant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value: { error: "missing station" }
+        '404':
+          description: Catch-all non trouvé (middleware global)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                nf:
+                  value: { error: "not found" }
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                boom:
+                  value: { error: "internal error" }
+
+  /last-metro:
+    get:
+      summary: Dernier métro par station (lecture DB)
+      description: |
+        Lit la table `config` avec 2 clés :
+        - `metro.defaults` → { line, tz }
+        - `metro.last` → map NomStation -> "HH:MM"
+
+        Paramètre `station` **obligatoire** et **insensible à la casse**.
+      tags: [Metro]
+      parameters:
+        - in: query
+          name: station
+          required: true
+          description: Nom de la station (obligatoire, insensible à la casse)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Dernier métro trouvé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LastMetroResponse' }
+              examples:
+                ok:
+                  value: { station: "Châtelet", lastMetro: "00:58", line: "M1", tz: "Europe/Paris" }
+        '400':
+          description: Paramètre manquant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value: { error: "missing station" }
+        '404':
+          description: Station inconnue
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                unknown:
+                  value: { error: "unknown station" }
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                boom:
+                  value: { error: "internal error" }

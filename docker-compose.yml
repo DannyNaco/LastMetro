@@ -1,0 +1,36 @@
+services:
+  api:
+    build: .
+    image: dm-api:v1
+    env_file: .env
+    ports:
+      - "${PORT}:${PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    env_file: .env
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+
+  swagger:
+    image: swaggerapi/swagger-ui:v5.17.14
+    environment:
+      - SWAGGER_JSON=/openapi/openapi.yaml
+    volumes:
+      - ./openapi:/openapi:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api

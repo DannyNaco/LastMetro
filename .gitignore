@@ -1,0 +1,11 @@
+# Node
+node_modules/
+
+
+.env
+.env.*.local
+
+# Docker
+*.pid
+*.log
+docker-data/
