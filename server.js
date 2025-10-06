@@ -85,4 +85,8 @@ app.get('/last-metro', async (req, res) => {
 // 404 JSON
 app.use((_req, res) => res.status(404).json({ error: 'not found' }));
 
-app.listen(PORT, () => console.log(`API ready on http://localhost:${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`API ready on http://localhost:${PORT}`));
+}
+
+module.exports = { app };
